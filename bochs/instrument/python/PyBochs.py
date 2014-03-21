@@ -22,7 +22,8 @@ import PyBochsConfig
 
 class DB(object):
     def __init__(self, samplename = 'SAMPLE.EXE', dbhost = '', dbuser = 'pandora', db = 'pandora', dbpass = ''):
-        if not LOGGING return
+        if not LOGGING:
+            return
         try:
             self.postgres_connection = psycopg2.connect( user = dbuser, password = dbpass, database = db)
             self.postgres_cursor = self.postgres_connection.cursor()
@@ -47,22 +48,26 @@ class DB(object):
         self.writes = []
 
     def store_memoryregion(self, process, firstseen, base, size, tag):
-        if not LOGGING return
+        if not LOGGING:
+            return
         self.postgres_cursor.execute( ('INSERT INTO analysis_%s_memoryregions VALUES(%%s,%%s,%%s,%%s,%%s)') % self.timestamp, (process, firstseen, base, size, tag))
         self.postgres_connection.commit()
 
     def store_image_dump(self, timestamp, process, region, eip, reason, data, tag):
-        if not LOGGING return
+        if not LOGGING:
+            return
         self.postgres_cursor.execute( ('INSERT INTO analysis_%s_dumps VALUES(%%s,%%s,%%s,%%s,%%s,%%s,%%s)') % self.timestamp, (timestamp, process, region, eip, reason, psycopg2.Binary(data), tag))
         self.postgres_connection.commit()
 
     def store_process(self, firstseen, imagename, pid, ppid, pdb):
-        if not LOGGING return
+        if not LOGGING:
+            return
         self.postgres_cursor.execute( ('INSERT INTO analysis_%s_processes VALUES(%%s,%%s,%%s,%%s,%%s)') % self.timestamp, (firstseen, imagename, pid, ppid, pdb))
         self.postgres_connection.commit()
 
     def store_branch(self, timestamp, process, source, target, type = 0):
-        if not LOGGING return
+        if not LOGGING:
+            return
         self.postgres_cursor.execute( 'INSERT INTO analysis_%s_branches VALUES (%%s,%%s,%%s,%%s,%%s)' % self.timestamp, (timestamp, process, source, target, type))
        # DON'T COMMIT HERE? #self.postgres_connection.commit()
 
