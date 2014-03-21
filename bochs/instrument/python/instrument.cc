@@ -517,7 +517,9 @@ void fetch_pending_page() {
    // If the current instruction would execute in ring 3,
    // we can instead simulate a page fault to get Windows to
    // page in memory for this process
-   if(bx_instr_pending_page && BX_CPU(cpu)->sregs[BX_SEG_REG_CS].selector.rpl == 3) {
+   //
+   // Instrumentation should only invoke this if bx_instr_pending_page is non-zero
+   if(BX_CPU(cpu)->sregs[BX_SEG_REG_CS].selector.rpl == 3) {
       bx_address pagein;
       bool result;
       result = py_pending_page(BX_CPU(0)->cr3, &pagein);

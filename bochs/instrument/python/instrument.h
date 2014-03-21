@@ -235,7 +235,7 @@ static inline void ev_branch(unsigned source, unsigned target, unsigned type) {
 #define BX_INSTR_PREFETCH_HINT(cpu_id, what, seg, offset)
 
 /* execution */
-#define BX_INSTR_BEFORE_EXECUTION(cpu_id, i) BX_INSTR_COND(BEFORE_EXECUTION) fetch_pending_page();
+#define BX_INSTR_BEFORE_EXECUTION(cpu_id, i) if(bx_instr_mask & BX_INSTR_COND_FINE && bx_instr_pending_page) fetch_pending_page();
 #define BX_INSTR_AFTER_EXECUTION(cpu_id, i)
 #define BX_INSTR_REPEAT_ITERATION(cpu_id, i)
 
