@@ -325,7 +325,12 @@ static const char *runtime_menu_prompt =
 "7. Misc runtime options\n"
 "8. Save configuration\n"
 "9. Continue simulation\n"
+#if BX_WITH_PYTHON == 1
+"10. Python Prompt\n"
+"11. Quit now\n"
+#else
 "10. Quit now\n"
+#endif
 "\n"
 "Please choose one:  [9] ";
 
@@ -406,6 +411,18 @@ int bx_config_interface(int menu)
 {
   Bit32u choice;
   char sr_path[CI_PATH_LENGTH];
+#if BX_WITH_PYTHON == 1
+  if(!Py_IsInitialized()) {
+      Py_Initialize();
+  }
+  Py_Sys_Module = PyImport_ImportModule("sys");
+  Py_XINCREF(Py_Sys_Module);
+  PyObject* l = PyList_New(0);
+  PyList_Append(l, PyString_FromString("Bochs"));
+  PyObject_SetAttrString(Py_Sys_Module, "argv", l);
+  Py_IPython_Module = PyImport_ImportModule("IPython");
+  Py_XINCREF(Py_IPython_Module);
+#endif
   while (1) {
     switch (menu) {
       case BX_CI_INIT:
@@ -512,6 +529,12 @@ int bx_config_interface(int menu)
               SIM->update_runtime_options();
               fprintf(stderr, "Continuing simulation\n");
               return 0;
+#if BX_WITH_PYTHON == 1
+            case BX_CI_RT_PYTHON:
+              PyObject_CallMethod(Py_IPython_Module, (char*)"embed", (char*)"()");
+              PyRun_InteractiveLoop(stdin, "Bochs");
+              break;
+#endif
             case BX_CI_RT_QUIT:
               fprintf(stderr, "You chose quit on the configuration interface.\n");
               bx_user_quit = 1;

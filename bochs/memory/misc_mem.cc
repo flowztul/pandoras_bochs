@@ -544,7 +544,7 @@ void BX_MEM_C::load_RAM(const char *path, bx_phy_address ramaddress, Bit8u type)
                          path));
 }
 
-#if (BX_DEBUGGER || BX_DISASM || BX_GDBSTUB)
+#if (BX_DEBUGGER || BX_DISASM || BX_GDBSTUB || BX_INSTRUMENTATION)
 bx_bool BX_MEM_C::dbg_fetch_mem(BX_CPU_C *cpu, bx_phy_address addr, unsigned len, Bit8u *buf)
 {
   bx_bool ret = 1;
@@ -611,7 +611,7 @@ bx_bool BX_MEM_C::dbg_fetch_mem(BX_CPU_C *cpu, bx_phy_address addr, unsigned len
 }
 #endif
 
-#if BX_DEBUGGER || BX_GDBSTUB
+#if BX_DEBUGGER || BX_GDBSTUB || BX_INSTRUMENTATION
 bx_bool BX_MEM_C::dbg_set_mem(bx_phy_address addr, unsigned len, Bit8u *buf)
 {
   if ((addr + len - 1) > BX_MEM_THIS len) {

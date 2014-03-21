@@ -1355,6 +1355,7 @@ AC_CHECK_HEADER(readline/history.h,
   AC_DEFINE(HAVE_READLINE_HISTORY_H)
   )
 
+
 INSTRUMENT_DIR='instrument/stubs'
 
 AC_MSG_CHECKING(for instrumentation support)
@@ -1363,7 +1364,7 @@ AC_ARG_ENABLE(instrumentation,
   [if test "$enableval" = yes; then
     AC_MSG_RESULT(yes)
     AC_DEFINE(BX_INSTRUMENTATION, 1)
-    INSTRUMENT_VAR='$(INSTRUMENT_LIB)'
+    INSTRUMENT_VAR='$(INSTRUMENT_LIB) $(DEBUGGER_LIB)'
    elif test "$enableval" = no; then
     AC_MSG_RESULT(no)
     AC_DEFINE(BX_INSTRUMENTATION, 0)
@@ -1372,7 +1373,7 @@ AC_ARG_ENABLE(instrumentation,
     AC_MSG_RESULT(yes)
     AC_DEFINE(BX_INSTRUMENTATION, 1)
     INSTRUMENT_DIR=$enableval
-    INSTRUMENT_VAR='$(INSTRUMENT_LIB)'
+    INSTRUMENT_VAR='$(INSTRUMENT_LIB) $(DEBUGGER_LIB)'
    fi],
   [
     AC_MSG_RESULT(no)
@@ -2017,6 +2018,75 @@ AC_ARG_WITH(wx,
 AC_ARG_WITH(all-libs,
   [  --with-all-libs                   compile all guis that Bochs supports],
   )
+
+dnl Python support, e.g., for instrumentation skins
+AC_ARG_WITH(python,
+  [  --with-python           enable Python support],
+  )
+
+if test "$with_python" = yes; then
+    AC_MSG_CHECKING(for python support)
+    PYTHON_CONFIG=$(which python-config)
+    if test -n "${PYTHON_CONFIG}" ; then
+        LIBS+=" $($PYTHON_CONFIG --ldflags)"
+        CFLAGS+=" $($PYTHON_CONFIG --cflags)"
+        CXXFLAGS+=" $($PYTHON_CONFIG --cflags)"
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(BX_WITH_PYTHON, 1)
+    else
+        AC_MSG_RESULT(no)
+        echo WARNING: Python support disabled because python-config was not found.
+        AC_DEFINE(BX_WITH_PYTHON, 0)
+    fi
+else
+    AC_DEFINE(BX_WITH_PYTHON, 0)
+fi
+
+dnl sqlite3 support, e.g., for instrumentation skins
+AC_ARG_WITH(sqlite3,
+  [  --with-sqlite3          enable SQLite3 support],
+  )
+
+if test "$with_sqlite3" = yes; then
+    AC_MSG_CHECKING(for sqlite3 support)
+    PKG_CONFIG=$(which pkg-config)
+    if test -n "${PKG_CONFIG}" && $PKG_CONFIG --exists sqlite3 ; then
+        LIBS+=" $($PKG_CONFIG --libs sqlite3)"
+        CFLAGS+=" $($PKG_CONFIG --cflags sqlite3)"
+        CXXFLAGS+=" $($PKG_CONFIG --cflags sqlite3)"
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(BX_WITH_SQLITE3, 1)
+    else
+        AC_MSG_RESULT(no)
+        echo WARNING: SQLite3 support disabled because either pkg-config or libsqlite3 was not found.
+        AC_DEFINE(BX_WITH_PYTHON, 0)
+    fi
+else
+    AC_DEFINE(BX_WITH_SQLITE3, 0)
+fi
+
+dnl PostgreSQL support, e.g., for instrumentation skins
+AC_ARG_WITH(postgresql,
+  [  --with-postgresql       enable PostgreSQL support],
+  )
+
+if test "$with_postgresql" = yes; then
+    AC_MSG_CHECKING(for PostgreSQL support)
+    PG_CONFIG=$(which pg_config)
+    if test -n "${PG_CONFIG}" ; then
+        LIBS+=" -L$($PG_CONFIG --libdir) -lpq"
+        CFLAGS+=" -I $($PG_CONFIG --includedir)"
+        CXXFLAGS+=" -I $($PG_CONFIG --includedir)"
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(BX_WITH_POSTGRESQL, 1)
+    else
+        AC_MSG_RESULT(no)
+        echo WARNING: PostgreSQL support disabled because either pg_config was not found.
+        AC_DEFINE(BX_WITH_PYTHON, 0)
+    fi
+else
+    AC_DEFINE(BX_WITH_POSTGRESQL, 0)
+fi
 
 dnl // DASH is option prefix for your platform
 dnl // SLASH is directory for your platform

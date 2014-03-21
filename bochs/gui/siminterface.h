@@ -735,6 +735,8 @@ public:
   virtual void debug_break() {}
   virtual void debug_interpret_cmd(char *cmd) {}
   virtual char *debug_get_next_command() {return NULL;}
+#endif
+#if BX_DEBUGGER || BX_INSTRUMENTATION
   virtual void debug_puts(const char *text) {}
 #endif
   virtual void register_configuration_interface(

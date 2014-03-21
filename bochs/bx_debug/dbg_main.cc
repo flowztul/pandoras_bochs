@@ -28,6 +28,12 @@ extern "C" {
 #include "cpu/cpu.h"
 #include "iodev/iodev.h"
 
+#if !BX_DEBUGGER && BX_INSTRUMENTATION
+#define dbg_cpu 0
+static FILE *debugger_log = stderr;
+// FIXME quick hack, investigate how to solve this properly
+#endif
+
 #if BX_DEBUGGER
 
 #include "disasm/disasm.h"
@@ -131,22 +137,6 @@ unsigned num_write_watchpoints = 0;
 unsigned num_read_watchpoints = 0;
 bx_watchpoint write_watchpoint[BX_DBG_MAX_WATCHPONTS];
 bx_watchpoint read_watchpoint[BX_DBG_MAX_WATCHPONTS];
-
-#define DBG_PRINTF_BUFFER_LEN 1024
-
-void dbg_printf(const char *fmt, ...)
-{
-  va_list ap;
-  va_start(ap, fmt);
-  char buf[DBG_PRINTF_BUFFER_LEN+1];
-  vsnprintf(buf, DBG_PRINTF_BUFFER_LEN, fmt, ap);
-  va_end(ap);
-  if (debugger_log != NULL) {
-    fprintf(debugger_log,"%s", buf);
-    fflush(debugger_log);
-  }
-  SIM->debug_puts(buf); // send to debugger, which will free buf when done.
-}
 
 void bx_dbg_init_infile(void)
 {
@@ -1332,40 +1322,6 @@ void bx_dbg_vmexitbp_command()
 #endif
 }
 
-bx_bool bx_dbg_read_linear(unsigned which_cpu, bx_address laddr, unsigned len, Bit8u *buf)
-{
-  unsigned remainsInPage;
-  bx_phy_address paddr;
-  unsigned read_len;
-  bx_bool paddr_valid;
-
-next_page:
-  remainsInPage = 0x1000 - PAGE_OFFSET(laddr);
-  read_len = (remainsInPage < len) ? remainsInPage : len;
-
-  paddr_valid = BX_CPU(which_cpu)->dbg_xlate_linear2phy(laddr, &paddr);
-  if (paddr_valid) {
-    if (! BX_MEM(0)->dbg_fetch_mem(BX_CPU(which_cpu), paddr, read_len, buf)) {
-      dbg_printf("bx_dbg_read_linear: physical memory read error (phy=0x" FMT_PHY_ADDRX ", lin=0x" FMT_ADDRX ")\n", paddr, laddr);
-      return 0;
-    }
-  }
-  else {
-    dbg_printf("bx_dbg_read_linear: physical address not available for linear 0x" FMT_ADDRX "\n", laddr);
-    return 0;
-  }
-
-  /* check for access across multiple pages */
-  if (remainsInPage < len)
-  {
-    laddr += read_len;
-    len -= read_len;
-    buf += read_len;
-    goto next_page;
-  }
-
-  return 1;
-}
 
 // where
 // stack trace: ebp -> old ebp
@@ -3865,64 +3821,6 @@ bx_address bx_dbg_get_instruction_pointer(void)
   return BX_CPU(dbg_cpu)->get_instruction_pointer();
 }
 
-bx_bool bx_dbg_read_pmode_descriptor(Bit16u sel, bx_descriptor_t *descriptor)
-{
-  bx_selector_t selector;
-  Bit32u dword1, dword2;
-  bx_address desc_base;
-
-  /* if selector is NULL, error */
-  if ((sel & 0xfffc) == 0) {
-    dbg_printf("bx_dbg_read_pmode_descriptor: Dereferencing a NULL selector!\n");
-    return 0;
-  }
-
-  /* parse fields in selector */
-  parse_selector(sel, &selector);
-
-  if (selector.ti) {
-    // LDT
-    if (((Bit32u)selector.index*8 + 7) > BX_CPU(dbg_cpu)->ldtr.cache.u.segment.limit_scaled) {
-      dbg_printf("bx_dbg_read_pmode_descriptor: selector (0x%04x) > LDT size limit\n", selector.index*8);
-      return 0;
-    }
-    desc_base = BX_CPU(dbg_cpu)->ldtr.cache.u.segment.base;
-  }
-  else {
-    // GDT
-    if (((Bit32u)selector.index*8 + 7) > BX_CPU(dbg_cpu)->gdtr.limit) {
-      dbg_printf("bx_dbg_read_pmode_descriptor: selector (0x%04x) > GDT size limit\n", selector.index*8);
-      return 0;
-    }
-    desc_base = BX_CPU(dbg_cpu)->gdtr.base;
-  }
-
-  if (! bx_dbg_read_linear(dbg_cpu, desc_base + selector.index * 8,     4, (Bit8u*) &dword1)) {
-    dbg_printf("bx_dbg_read_pmode_descriptor: cannot read selector 0x%04x (index=0x%04x)\n", sel, selector.index);
-    return 0;
-  }
-  if (! bx_dbg_read_linear(dbg_cpu, desc_base + selector.index * 8 + 4, 4, (Bit8u*) &dword2)) {
-    dbg_printf("bx_dbg_read_pmode_descriptor: cannot read selector 0x%04x (index=0x%04x)\n", sel, selector.index);
-    return 0;
-  }
-
-  memset (descriptor, 0, sizeof (bx_descriptor_t));
-  parse_descriptor(dword1, dword2, descriptor);
-
-  if (!descriptor->segment) {
-    dbg_printf("bx_dbg_read_pmode_descriptor: selector 0x%04x points to a system descriptor and is not supported!\n", sel);
-    return 0;
-  }
-
-  /* #NP(selector) if descriptor is not present */
-  if (descriptor->p==0) {
-    dbg_printf("bx_dbg_read_pmode_descriptor: descriptor 0x%04x not present!\n", sel);
-    return 0;
-  }
-
-  return 1;
-}
-
 void bx_dbg_load_segreg(unsigned seg_no, unsigned value)
 {
   bx_segment_reg_t sreg;
@@ -3967,41 +3865,6 @@ void bx_dbg_load_segreg(unsigned seg_no, unsigned value)
       BX_CPU(dbg_cpu)->dbg_set_sreg(seg_no, &sreg);
     }
   }
-}
-
-bx_address bx_dbg_get_laddr(Bit16u sel, bx_address ofs)
-{
-  bx_address laddr;
-
-  if (BX_CPU(dbg_cpu)->protected_mode()) {
-    bx_descriptor_t descriptor;
-    Bit32u lowaddr, highaddr;
-
-    if (! bx_dbg_read_pmode_descriptor(sel, &descriptor))
-      return 0;
-
-    // expand-down
-    if (IS_DATA_SEGMENT(descriptor.type) && IS_DATA_SEGMENT_EXPAND_DOWN(descriptor.type)) {
-      lowaddr = descriptor.u.segment.limit_scaled;
-      highaddr = descriptor.u.segment.g ? 0xffffffff : 0xffff;
-    }
-    else {
-      lowaddr = 0;
-      highaddr = descriptor.u.segment.limit_scaled;
-    }
-
-    if (ofs < lowaddr || ofs > highaddr) {
-      dbg_printf("WARNING: Offset %08X is out of selector %04x limit (%08x...%08x)!\n",
-        ofs, sel, lowaddr, highaddr);
-    }
-
-    laddr = descriptor.u.segment.base + ofs;
-  }
-  else {
-    laddr = sel * 16 + ofs;
-  }
-
-  return laddr;
 }
 
 void bx_dbg_step_over_command()
@@ -4105,3 +3968,170 @@ void bx_dbg_step_over_command()
 }
 
 #endif /* if BX_DEBUGGER */
+
+#if BX_DEBUGGER || BX_INSTRUMENTATION
+//FIXME add other variants of bx_dbg_read_linar, bx_dbg_get_laddr abd bx_dbg_read_pmode_descriptor, e.g. taking optional eptptr, gdtr, ldtr arguments
+bx_bool bx_dbg_read_linear(unsigned which_cpu, bx_address laddr, unsigned len, Bit8u *buf) {
+    return bx_dbg_read_linear( which_cpu, laddr, len, buf, BX_CPU_THIS_PTR cr3);
+}
+
+bx_bool bx_dbg_read_linear(unsigned which_cpu, bx_address laddr, unsigned len, Bit8u *buf, bx_phy_address pt_address)
+{
+  unsigned remainsInPage;
+  bx_phy_address paddr;
+  unsigned read_len;
+  bx_bool paddr_valid;
+
+next_page:
+  remainsInPage = 0x1000 - PAGE_OFFSET(laddr);
+  read_len = (remainsInPage < len) ? remainsInPage : len;
+
+  paddr_valid = BX_CPU(which_cpu)->dbg_xlate_linear2phy(laddr, &paddr, pt_address);
+  if (paddr_valid) {
+    if (! BX_MEM(0)->dbg_fetch_mem(BX_CPU(which_cpu), paddr, read_len, buf)) {
+        // FIXME ugly, but these aren't currently interesting to me
+#ifndef BX_INSTRUMENTATION
+      dbg_printf("bx_dbg_read_linear: physical memory read error (phy=0x" FMT_PHY_ADDRX ", lin=0x" FMT_ADDRX ")\n", paddr, laddr);
+#endif
+      return 0;
+    }
+  }
+  else {
+#ifndef BX_INSTRUMENTATION
+    dbg_printf("bx_dbg_read_linear: physical address not available for linear 0x" FMT_ADDRX " using page directory at 0x" FMT_ADDRX "\n", laddr, pt_address);
+#endif
+    return 0;
+  }
+
+  /* check for access across multiple pages */
+  if (remainsInPage < len)
+  {
+    laddr += read_len;
+    len -= read_len;
+    buf += read_len;
+    goto next_page;
+  }
+
+  return 1;
+}
+
+bx_bool bx_dbg_read_pmode_descriptor(Bit16u sel, bx_descriptor_t *descriptor, bx_phy_address pt_address)
+{
+  bx_selector_t selector;
+  Bit32u dword1, dword2;
+  bx_address desc_base;
+
+  /* if selector is NULL, error */
+  if ((sel & 0xfffc) == 0) {
+    dbg_printf("bx_dbg_read_pmode_descriptor: Dereferencing a NULL selector!\n");
+    return 0;
+  }
+
+  /* parse fields in selector */
+  parse_selector(sel, &selector);
+
+  if (selector.ti) {
+    // LDT
+    if (((Bit32u)selector.index*8 + 7) > BX_CPU(dbg_cpu)->ldtr.cache.u.segment.limit_scaled) {
+      dbg_printf("bx_dbg_read_pmode_descriptor: selector (0x%04x) > LDT size limit\n", selector.index*8);
+      return 0;
+    }
+    desc_base = BX_CPU(dbg_cpu)->ldtr.cache.u.segment.base;
+  }
+  else {
+    // GDT
+    if (((Bit32u)selector.index*8 + 7) > BX_CPU(dbg_cpu)->gdtr.limit) {
+      dbg_printf("bx_dbg_read_pmode_descriptor: selector (0x%04x) > GDT size limit\n", selector.index*8);
+      return 0;
+    }
+    desc_base = BX_CPU(dbg_cpu)->gdtr.base;
+  }
+
+  if (! bx_dbg_read_linear(dbg_cpu, desc_base + selector.index * 8,     4, (Bit8u*) &dword1, pt_address)) {
+    dbg_printf("bx_dbg_read_pmode_descriptor: cannot read selector 0x%04x (index=0x%04x), desc_base is 0x%08x\n", sel, selector.index, desc_base);
+    return 0;
+  }
+  if (! bx_dbg_read_linear(dbg_cpu, desc_base + selector.index * 8 + 4, 4, (Bit8u*) &dword2, pt_address)) {
+    dbg_printf("bx_dbg_read_pmode_descriptor: cannot read selector 0x%04x (index=0x%04x), desc_base is 0x%08x\n", sel, selector.index, desc_base);
+    return 0;
+  }
+
+  memset (descriptor, 0, sizeof (descriptor));
+  parse_descriptor(dword1, dword2, descriptor);
+
+  if (!descriptor->segment) {
+    dbg_printf("bx_dbg_read_pmode_descriptor: selector 0x%04x points to a system descriptor and is not supported!\n", sel);
+    return 0;
+  }
+
+  /* #NP(selector) if descriptor is not present */
+  if (descriptor->p==0) {
+    dbg_printf("bx_dbg_read_pmode_descriptor: descriptor 0x%04x not present!\n", sel);
+    return 0;
+  }
+
+  return 1;
+}
+
+bx_bool bx_dbg_read_pmode_descriptor(Bit16u sel, bx_descriptor_t *descriptor)
+{
+    return bx_dbg_read_pmode_descriptor(sel, descriptor, BX_CPU_THIS_PTR cr3);
+}
+
+bx_address bx_dbg_get_laddr(Bit16u sel, bx_address ofs, bx_phy_address pt_address)
+{
+
+  bx_address laddr;
+
+  if (BX_CPU(dbg_cpu)->protected_mode()) {
+    bx_descriptor_t descriptor;
+    Bit32u lowaddr, highaddr;
+
+    if (! bx_dbg_read_pmode_descriptor(sel, &descriptor, pt_address))
+      return 0;
+
+    // expand-down
+    if (IS_DATA_SEGMENT(descriptor.type) && IS_DATA_SEGMENT_EXPAND_DOWN(descriptor.type)) {
+      lowaddr = descriptor.u.segment.limit_scaled;
+      highaddr = descriptor.u.segment.g ? 0xffffffff : 0xffff;
+    }
+    else {
+      lowaddr = 0;
+      highaddr = descriptor.u.segment.limit_scaled;
+    }
+
+    if (ofs < lowaddr || ofs > highaddr) {
+      dbg_printf("WARNING: Offset %08X is out of selector %04x limit (%08x...%08x)!\n",
+        ofs, sel, lowaddr, highaddr);
+    }
+
+    laddr = descriptor.u.segment.base + ofs;
+  }
+  else {
+    laddr = sel * 16 + ofs;
+  }
+
+  return laddr;
+}
+
+bx_address bx_dbg_get_laddr(Bit16u sel, bx_address ofs)
+{
+    return bx_dbg_get_laddr(sel, ofs, BX_CPU_THIS_PTR cr3);
+}
+
+#define DBG_PRINTF_BUFFER_LEN 1024
+
+void dbg_printf(const char *fmt, ...)
+{
+  va_list ap;
+  va_start(ap, fmt);
+  char buf[DBG_PRINTF_BUFFER_LEN+1];
+  vsnprintf(buf, DBG_PRINTF_BUFFER_LEN, fmt, ap);
+  va_end(ap);
+  if (debugger_log != NULL) {
+    fprintf(debugger_log,"%s", buf);
+    fflush(debugger_log);
+  }
+  SIM->debug_puts(buf); // send to debugger, which will free buf when done.
+}
+#endif

@@ -290,6 +290,10 @@
 #define BX_WITH_SVGA 0
 #define BX_WITH_WX 0
 
+// Optional Libraries to link against
+#define BX_WITH_PYTHON 0
+#define BX_WITH_POSTGRESQL 0
+
 // BX_USE_TEXTCONFIG should be set to 1 unless Bochs is compiled
 // for wxWidgets only.
 #define BX_USE_TEXTCONFIG 1

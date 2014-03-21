@@ -20,6 +20,12 @@
 
 #include "config.h"
 
+#if BX_WITH_PYTHON == 1
+#include <Python.h>
+static PyObject* Py_Sys_Module;
+static PyObject* Py_IPython_Module;
+#endif
+
 #if BX_USE_TEXTCONFIG
 
 enum {
@@ -41,6 +47,9 @@ enum {
   BX_CI_RT_MISC,
   BX_CI_RT_SAVE_CFG,
   BX_CI_RT_CONT,
+#ifdef BX_WITH_PYTHON
+  BX_CI_RT_PYTHON,
+#endif
   BX_CI_RT_QUIT
 };
 

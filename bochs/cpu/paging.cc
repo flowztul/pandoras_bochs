@@ -1730,7 +1730,13 @@ void dbg_print_ept_paging_pte(int level, Bit64u entry)
 bx_bool BX_CPU_C::dbg_translate_guest_physical(bx_phy_address guest_paddr, bx_phy_address *phy, bx_bool verbose)
 {
   VMCS_CACHE *vm = &BX_CPU_THIS_PTR vmcs;
-  bx_phy_address pt_address = LPFOf(vm->eptptr);
+  bx_phy_address eptptr = LPFOf(vm->eptptr);
+  return dbg_translate_guest_physical(guest_paddr, phy, verbose, eptptr);
+}
+
+bx_bool BX_CPU_C::dbg_translate_guest_physical(bx_phy_address guest_paddr, bx_phy_address *phy, bx_bool verbose, bx_phy_address eptptr) {
+
+  bx_phy_address pt_address = eptptr;
   Bit64u offset_mask = BX_CONST64(0x0000ffffffffffff);
 
   for (int level = 3; level >= 0; --level) {
@@ -1770,8 +1776,9 @@ bx_bool BX_CPU_C::dbg_translate_guest_physical(bx_phy_address guest_paddr, bx_ph
 }
 #endif
 
-bx_bool BX_CPU_C::dbg_xlate_linear2phy(bx_address laddr, bx_phy_address *phy, bx_bool verbose)
-{
+bx_bool BX_CPU_C::dbg_xlate_linear2phy(bx_address laddr, bx_phy_address *phy, bx_bool verbose) {
+
+  bx_bool retval = 0;
   bx_phy_address paddress;
 
 #if BX_SUPPORT_X86_64
@@ -1796,6 +1803,43 @@ bx_bool BX_CPU_C::dbg_xlate_linear2phy(bx_address laddr, bx_phy_address *phy, bx
         return 1;
       }
     }
+    retval = dbg_xlate_linear2phy(laddr, &paddress, verbose, pt_address);
+  }
+
+  if(retval) {
+      *phy = A20ADDR(paddress);
+      return 1;
+  } else {
+      *phy = 0;
+      return 0;
+  }
+}
+
+#if BX_SUPPORT_VMX >= 2
+bx_bool BX_CPU_C::dbg_xlate_linear2phy(bx_address laddr, bx_phy_address *phy, bx_bool verbose, bx_phy_address pt_address)
+{
+  VMCS_CACHE *vm = &BX_CPU_THIS_PTR vmcs;
+  bx_phy_address eptptr = LPFOf(vm->eptptr);
+  return dbg_xlate_linear2phy(laddr, phy, verbose, pt_address, eptptr);
+}
+
+bx_bool BX_CPU_C::dbg_xlate_linear2phy(bx_address laddr, bx_phy_address *phy, bx_bool verbose, bx_phy_address pt_address, bx_phy_address eptptr)
+{
+#else
+bx_bool BX_CPU_C::dbg_xlate_linear2phy(bx_address laddr, bx_phy_address *phy, bx_bool verbose, bx_phy_address pt_address)
+{
+#endif
+
+  bx_phy_address paddress;
+
+#if BX_SUPPORT_X86_64
+  if (! long_mode()) laddr &= 0xffffffff;
+#endif
+
+  if (! BX_CPU_THIS_PTR cr0.get_PG()) {
+    paddress = (bx_phy_address) laddr;
+  }
+  else {
 
 #if BX_CPU_LEVEL >= 6
     if (BX_CPU_THIS_PTR cr4.get_PAE()) {
@@ -1818,7 +1862,7 @@ bx_bool BX_CPU_C::dbg_xlate_linear2phy(bx_address laddr, bx_phy_address *phy, bx
 #if BX_SUPPORT_VMX >= 2
         if (BX_CPU_THIS_PTR in_vmx_guest) {
           if (SECONDARY_VMEXEC_CONTROL(VMX_VM_EXEC_CTRL3_EPT_ENABLE)) {
-            if (! dbg_translate_guest_physical(pt_address, &pt_address, verbose))
+            if (! dbg_translate_guest_physical(pt_address, &pt_address, verbose, eptptr))
               goto page_fault;
           }
         }
@@ -1856,7 +1900,7 @@ bx_bool BX_CPU_C::dbg_xlate_linear2phy(bx_address laddr, bx_phy_address *phy, bx
 #if BX_SUPPORT_VMX >= 2
         if (BX_CPU_THIS_PTR in_vmx_guest) {
           if (SECONDARY_VMEXEC_CONTROL(VMX_VM_EXEC_CTRL3_EPT_ENABLE)) {
-            if (! dbg_translate_guest_physical(pt_address, &pt_address, verbose))
+            if (! dbg_translate_guest_physical(pt_address, &pt_address, verbose, eptptr))
               goto page_fault;
           }
         }
@@ -1886,7 +1930,7 @@ bx_bool BX_CPU_C::dbg_xlate_linear2phy(bx_address laddr, bx_phy_address *phy, bx
 #if BX_SUPPORT_VMX >= 2
   if (BX_CPU_THIS_PTR in_vmx_guest) {
     if (SECONDARY_VMEXEC_CONTROL(VMX_VM_EXEC_CTRL3_EPT_ENABLE)) {
-      if (! dbg_translate_guest_physical(paddress, &paddress, verbose))
+      if (! dbg_translate_guest_physical(paddress, &paddress, verbose, eptptr))
         goto page_fault;
     }
   }

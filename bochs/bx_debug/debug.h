@@ -38,8 +38,6 @@ extern "C" {
 
 extern Bit32u dbg_cpu;
 
-void dbg_printf (const char *fmt, ...);
-
 typedef enum {
   BX_DBG_SREG_ES,
   BX_DBG_SREG_CS,
@@ -215,7 +213,6 @@ bx_bool bx_dbg_register_debug_info(const char *devname, void *dev);
 
 #define EMPTY_ARG (-1)
 
-bx_bool bx_dbg_read_linear(unsigned which_cpu, bx_address laddr, unsigned len, Bit8u *buf);
 Bit16u bx_dbg_get_selector_value(unsigned int seg_no);
 Bit16u bx_dbg_get_ip (void);
 Bit32u bx_dbg_get_eip(void);
@@ -233,7 +230,6 @@ void bx_dbg_set_reg32_value(unsigned reg, Bit32u value);
 void bx_dbg_set_reg64_value(unsigned reg, Bit64u value);
 void bx_dbg_set_rip_value(bx_address value);
 void bx_dbg_load_segreg(unsigned reg, unsigned value);
-bx_address bx_dbg_get_laddr(Bit16u sel, bx_address ofs);
 void bx_dbg_step_over_command(void);
 void bx_dbg_trace_command(bx_bool enable);
 void bx_dbg_trace_reg_command(bx_bool enable);
@@ -508,5 +504,13 @@ void bx_dbg_disassemble_current(int which_cpu, int print_time);
 #endif // #ifdef __cplusplus
 
 #endif // #if BX_DEBUGGER
+
+#if __cplusplus && (BX_DEBUGGER || BX_INSTRUMENTATION)
+bx_bool bx_dbg_read_linear(unsigned which_cpu, bx_address laddr, unsigned len, Bit8u *buf);
+bx_bool bx_dbg_read_linear(unsigned which_cpu, bx_address laddr, unsigned len, Bit8u *buf, bx_phy_address pt_address);
+bx_address bx_dbg_get_laddr(Bit16u sel, bx_address ofs);
+bx_address bx_dbg_get_laddr(Bit16u sel, bx_address ofs, bx_phy_address pt_address);
+void dbg_printf (const char *fmt, ...);
+#endif
 
 #endif

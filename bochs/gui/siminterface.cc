@@ -156,6 +156,8 @@ public:
   virtual void debug_break();
   virtual void debug_interpret_cmd(char *cmd);
   virtual char *debug_get_next_command();
+#endif
+#if BX_DEBUGGER || BX_INSTRUMENTATION
   virtual void debug_puts(const char *cmd);
 #endif
   virtual void register_configuration_interface (
@@ -791,7 +793,9 @@ char *bx_real_sim_c::debug_get_next_command()
     return event.u.debugcmd.command;
   return NULL;
 }
+#endif
 
+#if BX_DEBUGGER || BX_INSTRUMENTATION
 void bx_real_sim_c::debug_puts(const char *text)
 {
   if (SIM->has_debug_gui()) {
@@ -1071,7 +1075,7 @@ bx_bool bx_real_sim_c::restore_config()
 bx_bool bx_real_sim_c::restore_logopts()
 {
   char logopts[BX_PATHNAME_LEN];
-  char line[512], string[512], prefix[8];
+  char line[512], string[512], prefix[16];
   char *ret, *ptr;
   int d, i, j, dev = 0, type = 0, action = 0;
   int ndev = SIM->get_n_log_modules();
@@ -1095,7 +1099,7 @@ bx_bool bx_real_sim_c::restore_logopts()
           while (isspace(string[0])) strcpy(string, string+1);
           while (isspace(string[strlen(string)-1])) string[strlen(string)-1] = 0;
           if (i == 0) {
-            sprintf(prefix, "[%-5s]", string);
+            snprintf(prefix, sizeof(prefix), "[%-5s]", string);
             dev = -1;
             for (d = 0; d < ndev; d++) {
               if (!strcmp(prefix, get_prefix(d))) {

@@ -4124,8 +4124,11 @@ public: // for now...
 #endif
 #if BX_DEBUGGER || BX_DISASM || BX_INSTRUMENTATION || BX_GDBSTUB
   BX_SMF bx_bool  dbg_xlate_linear2phy(bx_address linear, bx_phy_address *phy, bx_bool verbose = 0);
+  BX_SMF bx_bool  dbg_xlate_linear2phy(bx_address laddr, bx_phy_address *phy, bx_bool verbose, bx_phy_address pt_address);
+  BX_SMF bx_bool  dbg_xlate_linear2phy(bx_address laddr, bx_phy_address *phy, bx_bool verbose, bx_phy_address pt_address, bx_phy_address eptptr);
 #if BX_SUPPORT_VMX >= 2
   BX_SMF bx_bool dbg_translate_guest_physical(bx_phy_address guest_paddr, bx_phy_address *phy, bx_bool verbose = 0);
+  BX_SMF bx_bool dbg_translate_guest_physical(bx_phy_address guest_paddr, bx_phy_address *phy, bx_bool verbose, bx_phy_address eptptr);
 #endif
 #endif
 #if BX_LARGE_RAMFILE
