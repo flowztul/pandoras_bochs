@@ -14,11 +14,13 @@ yet), you'll have to configure it first. To compile a non-instrumented version
 of Bochs, you can use the following command line:
 
 ::
+
     ./configure  --enable-all-optimizations
 
 For configuring the instrumented version, use:
 
 ::
+
     ./configure --enable-all-optimizations --with-python --with-postgresql \
                 --enable-instrumentation=instrument/python
 
@@ -43,7 +45,8 @@ two files. Unrar it, and you should get a file named "IE8 - WinXP.ova", which
 is an exported VirtualBox VM in TAR format, which can be extracted by running
 
 ::
-$ tar xf 'IE8 - WinXP.ova'
+
+    $ tar xf 'IE8 - WinXP.ova'
 
 This should yield a virtual machine configuration and a virtual disk image in
 VMDK format named "IE8 - WinXP-disk1.vmdk". This first needs to be converted to
@@ -55,6 +58,7 @@ Therefore, the disk image needs to be converted to VDI format first, using
 VBoxManage as follows:
 
 ::
+
     $ VBoxManage clonehd -format VDI 'IE8 - WinXP-disk1.vmdk' winxp.vdi
     0%...10%...20%...30%...40%...50%...60%...70%...80%...90%...100%
     Clone hard disk created in format 'VDI'. UUID: 6fcac4ce-7b94-4858-bf0d-87a4203921e0
@@ -63,6 +67,7 @@ Next, qemu-img can be used to convert that image to raw format, creating a
 sparse file that requires about 2 GB on disk:
 
 ::
+
     $ qemu-img convert -O raw winxp.vdi winxp.raw
 
     $ du -sh *
@@ -77,6 +82,7 @@ following steps, for example:
 Add loopback devices for all partitions:
 
 ::
+
     $ sudo kpartx  -a winxp.raw 
     $ lsblk 
     NAME                      MAJ:MIN RM   SIZE RO TYPE  MOUNTPOINT
@@ -87,6 +93,7 @@ Add loopback devices for all partitions:
 Resize the NTS partition:
 
 ::
+
     $ ntfsresize --size 8388075520 /dev/mapper/loop0p1 
     ntfsresize v2013.1.13AR.1 (libntfs-3g)
     Device name        : /dev/mapper/loop0p1
@@ -127,23 +134,27 @@ Resize the NTS partition:
 Recreate the partition table entry:
 
 ::
-$ fdisk -C 16253 -H 16 -S 63 winxp.raw 
+
+    $ fdisk -C 16253 -H 16 -S 63 winxp.raw 
 
 We need DOS compatibility to be able to recreate a partition at sector 63:
 
 ::
+
     Command (m for help): c
     DOS Compatibility flag is set (DEPRECATED!)
 
 Delete the original partition:
 
 ::
+
     Command (m for help): d
     Selected partition 1
 
 Create new partition with the right size:
 
 ::
+
     Command (m for help): n
     Partition type:
        p   primary (0 primary, 0 extended, 4 free)
@@ -157,6 +168,7 @@ Create new partition with the right size:
 Set partition type to NTFS:
 
 ::
+
     Command (m for help): t
     Selected partition 1
     Hex code (type L to list codes): 7
@@ -165,12 +177,14 @@ Set partition type to NTFS:
 Make partition bootable:
 
 ::
+
     Command (m for help): a
     Partition number (1-4): 1
 
 Display partition table, write and quit:
 
 ::
+
     Command (m for help): p
 
     Disk winxp.raw: 136.3 GB, 136260878336 bytes
@@ -191,49 +205,52 @@ Display partition table, write and quit:
 Truncate the disk to the right size:
 
 ::
-$ truncate -s 8388108288 winxp.raw 
+
+    $ truncate -s 8388108288 winxp.raw 
 
 Finally, convert the disk to Bochs's "sparse" image format, using the "bximage"
 tool:
 
 ::
+
     $ bximage
     ========================================================================
                                     bximage
       Disk Image Creation / Conversion / Resize and Commit Tool for Bochs
                                       $Id$
     ========================================================================
-
+    
     1. Create new floppy or hard disk image
     2. Convert hard disk image to other format (mode)
     3. Resize hard disk image
     4. Commit 'undoable' redolog to base image
     5. Disk image info
-
+    
     0. Quit
-
+    
     Please choose one [0] 2
-
+    
     Convert image
-
+    
     What is the name of the source image?
     [c.img] winxp.raw
-
+    
     What should be the name of the new image?
     [winxp.raw] winxp.sparse.0
-
+    
     What kind of image should I create?
     Please type flat, sparse, growing, vpc or vmware4. [flat] sparse
-
+    
     source image mode = 'flat'
     hd_size: 8388108288
     sparse: pagesize = 0x8000, data_start = 0x100000
-
+    
     Converting image file: [100%] Done.
 
 Also create another empty sparse image of the same size:
 
 ::
+
     $ bximage
     ========================================================================
                                     bximage
@@ -272,7 +289,9 @@ Also create another empty sparse image of the same size:
 
 Next, create a copy of this disk image:
 
-$ cp winxp.sparse.1 winxp.sparse2
+::
+
+    $ cp winxp.sparse.1 winxp.sparse2
 
 One benefit of the sparse image format is that the disk images can be stacked,
 with writes only going to the topmost layer.
@@ -297,8 +316,9 @@ need pydasm in your PYTHONPATH.
 To start an analysis, run
 
 ::
-$ cp -a winxp.sparse.2.saved winxp.sparse.2 
-$ cp -a SUSPEND_DIRECTORY.saved SUSPEND_DIRECTORY
-$ bochs -r SUSPEND_DIRECTORY
+
+    $ cp -a winxp.sparse.2.saved winxp.sparse.2 
+    $ cp -a SUSPEND_DIRECTORY.saved SUSPEND_DIRECTORY
+    $ bochs -r SUSPEND_DIRECTORY
 
 
